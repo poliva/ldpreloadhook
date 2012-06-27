@@ -66,6 +66,7 @@ int open (const char *pathname, int flags, ...){
 
 	if (strcmp (pathname, spy_file)){	
 		fd = func_open (pathname, flags, mode);
+		DPRINTF ("HOOK: opened file %s (fd=%d)\n", pathname, fd);
 		return fd;
 	}
 
@@ -73,7 +74,7 @@ int open (const char *pathname, int flags, ...){
 	data_r_fd = func_open (data_r_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
 	hook_fd = func_open (pathname, flags, mode);
 
-	DPRINTF ("HOOK: opened file %s (fd=%d)\n", pathname, hook_fd);
+	DPRINTF ("HOOK: opened hooked file %s (fd=%d)\n", pathname, hook_fd);
 
 	return hook_fd;
 }
@@ -83,11 +84,13 @@ int close (int fd){
 	static int (*func_close) (int) = NULL;
 	int retval = 0;
 
-	if (fd == hook_fd)
-		DPRINTF ("HOOK: closed file %s (fd=%d)\n", spy_file, fd);
-
 	if (! func_close)
 		func_close = (int (*) (int)) dlsym (REAL_LIBC, "close");
+
+	if (fd == hook_fd)
+		DPRINTF ("HOOK: closed hooked file %s (fd=%d)\n", spy_file, fd);
+	else
+		DPRINTF ("HOOK: closed file descriptor (fd=%d)\n", fd);
 		
 	retval = func_close (fd);
 	return retval;
@@ -105,10 +108,12 @@ int ioctl (int fd, request_t request, ...){
 	argp = va_arg (args, void *);
 	va_end (args);
 
-	if (fd != hook_fd)
-		return func_ioctl (fd, request, argp);
-	else
+	if (fd != hook_fd) {
 		DPRINTF ("HOOK: ioctl (fd=%d)\n", fd);
+		return func_ioctl (fd, request, argp);
+	} 
+	
+	DPRINTF ("HOOK: ioctl on hooked file %s (fd=%d)\n", spy_file, fd);
 
 	/* Capture the ioctl() calls */
 	return func_ioctl (hook_fd, request, argp);
@@ -125,10 +130,12 @@ ssize_t read (int fd, void *buf, size_t count){
 	if (! func_write)
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
-	if (fd != hook_fd)
+	if (fd != hook_fd) {
+		DPRINTF ("HOOK: read %d bytes from file descriptor (fd=%d)\n", count, fd);
 		return func_read (fd, buf, count);
-	else
-		DPRINTF ("HOOK: read %d bytes from file %s (fd=%d)\n", count, spy_file, fd);
+	}
+
+	DPRINTF ("HOOK: read %d bytes from hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	retval = func_read(fd, buf, count);
 
@@ -149,10 +156,12 @@ ssize_t write (int fd, const void *buf, size_t count){
 	if (! func_write)
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
-	if (fd != hook_fd)
+	if (fd != hook_fd) {
+		DPRINTF ("HOOK: write %d bytes to file descriptor (fd=%d)\n", count, fd);
 		return func_write (fd, buf, count);
+	}
 
-	DPRINTF ("HOOK: write %d bytes to file %s (fd=%d)\n", count, spy_file, fd);
+	DPRINTF ("HOOK: write %d bytes to hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	func_write (hook_fd, buf, count);
 	retval = func_write (data_w_fd, buf, count);

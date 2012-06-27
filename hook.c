@@ -48,7 +48,10 @@ static int data_w_fd = -1, hook_fd = -1, data_r_fd = -1;
 
 static const char *data_w_file = "/tmp/write_data.bin";
 static const char *data_r_file = "/tmp/read_data.bin"; 
+static const char *delimiter = "****************";
 static const char *spy_file = "/dev/serio_raw0";
+
+ssize_t write (int fd, const void *buf, size_t count);
 
 int open (const char *pathname, int flags, ...){
 
@@ -70,9 +73,13 @@ int open (const char *pathname, int flags, ...){
 		return fd;
 	}
 
-	data_w_fd = func_open (data_w_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
-	data_r_fd = func_open (data_r_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
+	data_w_fd = func_open (data_w_file, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	data_r_fd = func_open (data_r_file, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	hook_fd = func_open (pathname, flags, mode);
+
+	/* write the delimiter each time we open the files */
+	write (data_r_fd, delimiter, strlen(delimiter));
+	write (data_w_fd, delimiter, strlen(delimiter));
 
 	DPRINTF ("HOOK: opened hooked file %s (fd=%d)\n", pathname, hook_fd);
 

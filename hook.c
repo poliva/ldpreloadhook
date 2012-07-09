@@ -15,12 +15,13 @@
  * License as published by the Free Software Foundation; either
  * version 2 of the License, or (at your option) any later version.
  *
- * 1) Configure "spy_file" in the code below
- * 2) Compile:
+ * 1) Compile:
  *   gcc -fPIC -c -o hook.o hook.c
  *   gcc -shared -o hook.so hook.o -ldl
- * 3) Usage:
+ * 2) Usage:
  *   LD_PRELOAD="./hook.so" command
+ *   LD_PRELOAD="./hook.so" SPYFILE="/file/to/spy" command
+ *   LD_PRELOAD="./hook.so" SPYFILE="/file/to/spy" DELIMITER="***" command
  */
 
 #include <stdarg.h>
@@ -48,8 +49,6 @@ static int data_w_fd = -1, hook_fd = -1, data_r_fd = -1;
 
 static const char *data_w_file = "/tmp/write_data.bin";
 static const char *data_r_file = "/tmp/read_data.bin"; 
-static const char *delimiter = "****************";
-static const char *spy_file = "/dev/serio_raw0";
 
 ssize_t write (int fd, const void *buf, size_t count);
 
@@ -59,6 +58,9 @@ int open (const char *pathname, int flags, ...){
 	va_list args;
 	mode_t mode;
 	int fd;
+
+	setenv("SPYFILE", "spyfile", 0);
+	char *spy_file = getenv("SPYFILE");
 
 	if (!func_open)
 		func_open = (int (*) (const char *, int, mode_t)) dlsym (REAL_LIBC, "open");
@@ -78,8 +80,10 @@ int open (const char *pathname, int flags, ...){
 	hook_fd = func_open (pathname, flags, mode);
 
 	/* write the delimiter each time we open the files */
-	write (data_r_fd, delimiter, strlen(delimiter));
-	write (data_w_fd, delimiter, strlen(delimiter));
+	if (getenv("DELIMITER") != NULL) {
+		write (data_r_fd, getenv("DELIMITER"), strlen(getenv("DELIMITER")));
+		write (data_w_fd, getenv("DELIMITER"), strlen(getenv("DELIMITER")));
+	}
 
 	DPRINTF ("HOOK: opened hooked file %s (fd=%d)\n", pathname, hook_fd);
 
@@ -90,6 +94,9 @@ int close (int fd){
 
 	static int (*func_close) (int) = NULL;
 	int retval = 0;
+
+	setenv("SPYFILE", "spyfile", 0);
+	char *spy_file = getenv("SPYFILE");
 
 	if (! func_close)
 		func_close = (int (*) (int)) dlsym (REAL_LIBC, "close");
@@ -108,6 +115,9 @@ int ioctl (int fd, request_t request, ...){
 	static int (*func_ioctl) (int, request_t, void *) = NULL;
 	va_list args;
 	void *argp;
+
+	setenv("SPYFILE", "spyfile", 0);
+	char *spy_file = getenv("SPYFILE");
 
 	if (! func_ioctl)
 		func_ioctl = (int (*) (int, request_t, void *)) dlsym (REAL_LIBC, "ioctl");
@@ -132,6 +142,10 @@ ssize_t read (int fd, void *buf, size_t count){
 	static ssize_t (*func_write) (int, const void*, size_t) = NULL;
 
 	ssize_t retval = 0;
+
+	setenv("SPYFILE", "spyfile", 0);
+	char *spy_file = getenv("SPYFILE");
+
 	if (! func_read)
 		func_read = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "read");
 	if (! func_write)
@@ -159,6 +173,9 @@ ssize_t write (int fd, const void *buf, size_t count){
 
 	static ssize_t (*func_write) (int, const void*, size_t) = NULL;
 	ssize_t retval = 0;
+
+	setenv("SPYFILE", "spyfile", 0);
+	char *spy_file = getenv("SPYFILE");
 
 	if (! func_write)
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");

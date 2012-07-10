@@ -30,6 +30,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <dlfcn.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define DPRINTF(format, args...)	fprintf(stderr, format, ## args)
 

@@ -68,7 +68,7 @@ int open (const char *pathname, int flags, ...){
 		func_open = (int (*) (const char *, int, mode_t)) dlsym (REAL_LIBC, "open");
 
 	va_start (args, flags);
-	mode = va_arg (args, mode_t);
+	mode = va_arg (args, int);
 	va_end (args);
 
 	if (strcmp (pathname, spy_file)){	

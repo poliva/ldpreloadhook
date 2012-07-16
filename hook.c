@@ -50,8 +50,8 @@ typedef int request_t;
 static int data_w_fd = -1, hook_fd = -1, data_r_fd = -1;
 
 #ifdef __ANDROID__
-static const char *data_w_file = "/sdcard/write_data.bin";
-static const char *data_r_file = "/sdcard/read_data.bin";
+static const char *data_w_file = "/data/local/tmp/write_data.bin";
+static const char *data_r_file = "/data/local/tmp/read_data.bin";
 #else
 static const char *data_w_file = "/tmp/write_data.bin";
 static const char *data_r_file = "/tmp/read_data.bin"; 

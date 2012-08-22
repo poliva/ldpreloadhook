@@ -1,7 +1,7 @@
 ldpreloadhook
 =============
 
-a quick open/close/ioctl/read/write/free syscall hooker
+a quick open/close/ioctl/read/write/free function hooker
 
 **Usage:**
 

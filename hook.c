@@ -1,5 +1,5 @@
 /*
- * ldpreloadhook - a quick open/close/ioctl/read/write syscall hooker
+ * ldpreloadhook - a quick open/close/ioctl/read/write/free syscall hooker
  * Copyright (C) 2012 Pau Oliva Fora <pof@eslack.org>
  *
  * Based on vsound 0.6 source code:
@@ -22,6 +22,9 @@
  *   LD_PRELOAD="./hook.so" command
  *   LD_PRELOAD="./hook.so" SPYFILE="/file/to/spy" command
  *   LD_PRELOAD="./hook.so" SPYFILE="/file/to/spy" DELIMITER="***" command
+ * to spy the content of buffers free'd by free(), set the environment
+ * variable SPYFREE, for example:
+ *   LD_PRELOAD="./hook.so" SPYFREE=1 command
  */
 
 #include <stdarg.h>
@@ -58,6 +61,7 @@ static const char *data_r_file = "/tmp/read_data.bin";
 #endif
 
 ssize_t write (int fd, const void *buf, size_t count);
+void free (void *buf);
 
 int open (const char *pathname, int flags, ...){
 
@@ -198,4 +202,35 @@ ssize_t write (int fd, const void *buf, size_t count){
 	retval = func_write (data_w_fd, buf, count);
 
 	return retval;
+}
+
+void free (void *ptr){	
+
+	static void (*func_free) (void*) = NULL;
+
+	char *tmp = ptr;
+	char tmp_buf[1025] = {0};
+	size_t total = 0;
+
+	if (! func_free) 
+		func_free = (void (*) (void*)) dlsym (REAL_LIBC, "free");
+
+	if (getenv("SPYFREE") != NULL) {
+		if (ptr != NULL) {
+
+			while (*tmp != '\0') {
+				tmp_buf[total] = *tmp;
+				total++;
+				if (total == 1024)
+					break;
+				tmp++;
+			}
+
+			if (strlen(tmp_buf) != 0) 
+				DPRINTF("HOOK: free( ptr[%d]=%s )\n",strlen(tmp_buf), tmp_buf);
+		}
+	}
+
+	func_free (ptr);
+
 }

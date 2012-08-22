@@ -1,5 +1,5 @@
 /*
- * ldpreloadhook - a quick open/close/ioctl/read/write/free function hooker
+ * ldpreloadhook - a quick open/close/ioctl/read/write/free symbol hooker
  * Copyright (C) 2012 Pau Oliva Fora <pof@eslack.org>
  *
  * Based on vsound 0.6 source code:

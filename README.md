@@ -1,7 +1,7 @@
 ldpreloadhook
 =============
 
-a quick open/close/ioctl/read/write syscall hooker
+a quick open/close/ioctl/read/write/free syscall hooker
 
 **Usage:**
 
@@ -28,4 +28,9 @@ All data written to this file will be saved in /tmp/write_data.bin
 Optionally, if you want to have a delimiter set in the read/write data files each time the file is opened, you can set the environment variable DELIMITER:
 <pre>
       LD_PRELOAD="./hook.so" SPYFILE="/dev/serio_raw0" DELIMITER="---" command
+</pre>
+
+You can also spy on free() calls by setting the environment variable SPYFREE, this will print the contents of every buffer before free()ing them:
+<pre>
+      LD_PRELOAD="./hook.so" SPYFREE=1 command
 </pre>

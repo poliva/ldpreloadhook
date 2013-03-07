@@ -163,11 +163,11 @@ ssize_t read (int fd, void *buf, size_t count){
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
 	if (fd != hook_fd) {
-		DPRINTF ("HOOK: read %d bytes from file descriptor (fd=%d)\n", count, fd);
+		DPRINTF ("HOOK: read %zd bytes from file descriptor (fd=%d)\n", count, fd);
 		return func_read (fd, buf, count);
 	}
 
-	DPRINTF ("HOOK: read %d bytes from hooked file %s (fd=%d)\n", count, spy_file, fd);
+	DPRINTF ("HOOK: read %zd bytes from hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	retval = func_read(fd, buf, count);
 
@@ -192,11 +192,11 @@ ssize_t write (int fd, const void *buf, size_t count){
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
 	if (fd != hook_fd) {
-		DPRINTF ("HOOK: write %d bytes to file descriptor (fd=%d)\n", count, fd);
+		DPRINTF ("HOOK: write %zd bytes to file descriptor (fd=%d)\n", count, fd);
 		return func_write (fd, buf, count);
 	}
 
-	DPRINTF ("HOOK: write %d bytes to hooked file %s (fd=%d)\n", count, spy_file, fd);
+	DPRINTF ("HOOK: write %zd bytes to hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	func_write (hook_fd, buf, count);
 	retval = func_write (data_w_fd, buf, count);
@@ -227,7 +227,7 @@ void free (void *ptr){
 			}
 
 			if (strlen(tmp_buf) != 0) 
-				DPRINTF("HOOK: free( ptr[%d]=%s )\n",strlen(tmp_buf), tmp_buf);
+				DPRINTF("HOOK: free( ptr[%zd]=%s )\n",strlen(tmp_buf), tmp_buf);
 		}
 	}
 

@@ -60,6 +60,11 @@ static const char *data_w_file = "/tmp/write_data.bin";
 static const char *data_r_file = "/tmp/read_data.bin"; 
 #endif
 
+static void _libhook_init() __attribute__ ((constructor));
+static void _libhook_init() {   
+	unsetenv("LD_PRELOAD");
+}
+
 ssize_t write (int fd, const void *buf, size_t count);
 void free (void *buf);
 

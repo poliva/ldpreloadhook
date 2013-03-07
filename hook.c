@@ -106,6 +106,21 @@ int open (const char *pathname, int flags, ...){
 	return hook_fd;
 }
 
+int strcmp(const char *s1, const char *s2) {
+
+	static int (*func_strcmp) (const char *, const char *) = NULL;
+	int retval = 0;
+
+	if (! func_strcmp)
+		func_strcmp = (int (*) (const char*, const char*)) dlsym (REAL_LIBC, "strcmp");
+
+	DPRINTF ("HOOK: strcmp( %s , %s )\n", s1, s2);
+
+	retval = func_strcmp (s1, s2);
+	return retval;
+
+}
+
 int close (int fd){	
 
 	static int (*func_close) (int) = NULL;

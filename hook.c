@@ -1,6 +1,6 @@
 /*
- * ldpreloadhook - a quick open/close/ioctl/read/write/free symbol hooker
- * Copyright (C) 2012 Pau Oliva Fora <pof@eslack.org>
+ * ldpreloadhook - a quick open/close/ioctl/read/write/free/strcmp/strncmp symbol hooker
+ * Copyright (C) 2012-2013 Pau Oliva Fora <pof@eslack.org>
  *
  * Based on vsound 0.6 source code:
  *   Copyright (C) 2004 Nathan Chantrell <nsc@zorg.org>
@@ -25,6 +25,9 @@
  * to spy the content of buffers free'd by free(), set the environment
  * variable SPYFREE, for example:
  *   LD_PRELOAD="./hook.so" SPYFREE=1 command
+ * to spy the strings compared using strcmp(), set the environment
+ * variable SPYSTR, for example:
+ *   LD_PRELOAD="./hook.so" SPYSTR=1 command
  */
 
 #include <stdarg.h>
@@ -59,6 +62,11 @@ static const char *data_r_file = "/data/local/tmp/read_data.bin";
 static const char *data_w_file = "/tmp/write_data.bin";
 static const char *data_r_file = "/tmp/read_data.bin"; 
 #endif
+
+static void _libhook_init() __attribute__ ((constructor));
+static void _libhook_init() {   
+	unsetenv("LD_PRELOAD");
+}
 
 ssize_t write (int fd, const void *buf, size_t count);
 void free (void *buf);
@@ -101,6 +109,39 @@ int open (const char *pathname, int flags, ...){
 	return hook_fd;
 }
 
+int strcmp(const char *s1, const char *s2) {
+
+	static int (*func_strcmp) (const char *, const char *) = NULL;
+	int retval = 0;
+
+	if (! func_strcmp)
+		func_strcmp = (int (*) (const char*, const char*)) dlsym (REAL_LIBC, "strcmp");
+
+	if (getenv("SPYSTR") != NULL) {
+		DPRINTF ("HOOK: strcmp( \"%s\" , \"%s\" )\n", s1, s2);
+	}
+
+	retval = func_strcmp (s1, s2);
+	return retval;
+
+}
+
+int strncmp(const char *s1, const char *s2, size_t n) {
+
+	static int (*func_strncmp) (const char *, const char *, size_t) = NULL;
+	int retval = 0;
+
+	if (! func_strncmp)
+		func_strncmp = (int (*) (const char*, const char*, size_t)) dlsym (REAL_LIBC, "strncmp");
+
+	if (getenv("SPYSTR") != NULL) {
+		DPRINTF ("HOOK: strncmp( \"%s\" , \"%s\" , %zd )\n", s1, s2, n);
+	}
+
+	retval = func_strncmp (s1, s2, n);
+	return retval;
+
+}
 int close (int fd){	
 
 	static int (*func_close) (int) = NULL;
@@ -163,11 +204,11 @@ ssize_t read (int fd, void *buf, size_t count){
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
 	if (fd != hook_fd) {
-		DPRINTF ("HOOK: read %d bytes from file descriptor (fd=%d)\n", count, fd);
+		DPRINTF ("HOOK: read %zd bytes from file descriptor (fd=%d)\n", count, fd);
 		return func_read (fd, buf, count);
 	}
 
-	DPRINTF ("HOOK: read %d bytes from hooked file %s (fd=%d)\n", count, spy_file, fd);
+	DPRINTF ("HOOK: read %zd bytes from hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	retval = func_read(fd, buf, count);
 
@@ -192,11 +233,11 @@ ssize_t write (int fd, const void *buf, size_t count){
 		func_write = (ssize_t (*) (int, const void*, size_t)) dlsym (REAL_LIBC, "write");
 
 	if (fd != hook_fd) {
-		DPRINTF ("HOOK: write %d bytes to file descriptor (fd=%d)\n", count, fd);
+		DPRINTF ("HOOK: write %zd bytes to file descriptor (fd=%d)\n", count, fd);
 		return func_write (fd, buf, count);
 	}
 
-	DPRINTF ("HOOK: write %d bytes to hooked file %s (fd=%d)\n", count, spy_file, fd);
+	DPRINTF ("HOOK: write %zd bytes to hooked file %s (fd=%d)\n", count, spy_file, fd);
 
 	func_write (hook_fd, buf, count);
 	retval = func_write (data_w_fd, buf, count);
@@ -227,7 +268,7 @@ void free (void *ptr){
 			}
 
 			if (strlen(tmp_buf) != 0) 
-				DPRINTF("HOOK: free( ptr[%d]=%s )\n",strlen(tmp_buf), tmp_buf);
+				DPRINTF("HOOK: free( ptr[%zd]=%s )\n",strlen(tmp_buf), tmp_buf);
 		}
 	}
 

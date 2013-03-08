@@ -1,6 +1,6 @@
 /*
- * ldpreloadhook - a quick open/close/ioctl/read/write/free symbol hooker
- * Copyright (C) 2012 Pau Oliva Fora <pof@eslack.org>
+ * ldpreloadhook - a quick open/close/ioctl/read/write/free/strcmp/strncmp symbol hooker
+ * Copyright (C) 2012-2013 Pau Oliva Fora <pof@eslack.org>
  *
  * Based on vsound 0.6 source code:
  *   Copyright (C) 2004 Nathan Chantrell <nsc@zorg.org>
@@ -25,6 +25,9 @@
  * to spy the content of buffers free'd by free(), set the environment
  * variable SPYFREE, for example:
  *   LD_PRELOAD="./hook.so" SPYFREE=1 command
+ * to spy the strings compared using strcmp(), set the environment
+ * variable SPYSTR, for example:
+ *   LD_PRELOAD="./hook.so" SPYSTR=1 command
  */
 
 #include <stdarg.h>
@@ -114,13 +117,31 @@ int strcmp(const char *s1, const char *s2) {
 	if (! func_strcmp)
 		func_strcmp = (int (*) (const char*, const char*)) dlsym (REAL_LIBC, "strcmp");
 
-	DPRINTF ("HOOK: strcmp( %s , %s )\n", s1, s2);
+	if (getenv("SPYSTR") != NULL) {
+		DPRINTF ("HOOK: strcmp( \"%s\" , \"%s\" )\n", s1, s2);
+	}
 
 	retval = func_strcmp (s1, s2);
 	return retval;
 
 }
 
+int strncmp(const char *s1, const char *s2, size_t n) {
+
+	static int (*func_strncmp) (const char *, const char *, size_t) = NULL;
+	int retval = 0;
+
+	if (! func_strncmp)
+		func_strncmp = (int (*) (const char*, const char*, size_t)) dlsym (REAL_LIBC, "strncmp");
+
+	if (getenv("SPYSTR") != NULL) {
+		DPRINTF ("HOOK: strncmp( \"%s\" , \"%s\" , %zd )\n", s1, s2, n);
+	}
+
+	retval = func_strncmp (s1, s2, n);
+	return retval;
+
+}
 int close (int fd){	
 
 	static int (*func_close) (int) = NULL;

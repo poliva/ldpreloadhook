@@ -289,7 +289,23 @@ void *memcpy(void *dest, const void *src, size_t n) {
 
 	DPRINTF("HOOK: memcpy( dest=%p , src=%p, size=%zd )\n", dest, src, n);
 	func_memcpy(dest,src,n);
-	// TODO: maybe print hexdump of the memcpy'ed buffer
+
+	char *tmp = dest;
+	char tmp_buf[1025] = {0};
+	size_t total = 0;
+
+	DPRINTF("    memcpy buffer: ");
+	while (total < n) {
+		tmp_buf[total] = *tmp;
+		DPRINTF("%02X ", tmp_buf[total]);
+		total++;
+		if (total == 1024)
+			break;
+		tmp++;
+	}
+
+	DPRINTF("\n");
+	DPRINTF("    memcpy str: [%zd]=%s )\n",strlen(tmp_buf), tmp_buf);
 
 }
 

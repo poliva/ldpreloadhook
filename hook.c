@@ -38,6 +38,8 @@
 #include <dlfcn.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdlib.h>
+#include <signal.h>
 
 #define DPRINTF(format, args...)	fprintf(stderr, format, ## args)
 
@@ -53,6 +55,8 @@ typedef unsigned long request_t;
 typedef int request_t;
 #endif
 
+typedef void (*sighandler_t)(int);
+
 static int data_w_fd = -1, hook_fd = -1, data_r_fd = -1;
 
 #ifdef __ANDROID__
@@ -65,7 +69,9 @@ static const char *data_r_file = "/tmp/read_data.bin";
 
 static void _libhook_init() __attribute__ ((constructor));
 static void _libhook_init() {   
-	unsetenv("LD_PRELOAD");
+	/* causes segfault on some android, uncomment if you need it */
+	//unsetenv("LD_PRELOAD");
+	printf("[] Hooking!\n");
 }
 
 ssize_t write (int fd, const void *buf, size_t count);
@@ -273,5 +279,210 @@ void free (void *ptr){
 	}
 
 	func_free (ptr);
+}
 
+void *memcpy(void *dest, const void *src, size_t n) {
+
+	static void (*func_memcpy) (void*, const void *, size_t) = NULL;
+	if (! func_memcpy)
+		func_memcpy = (void (*) (void*, const void *, size_t)) dlsym (REAL_LIBC, "memcpy");
+
+	DPRINTF("HOOK: memcpy( dest=%p , src=%p, size=%zd )\n", dest, src, n);
+	func_memcpy(dest,src,n);
+	// TODO: maybe print hexdump of the memcpy'ed buffer
+
+}
+
+int puts(const char *s) {
+
+	static int (*func_puts) (const char *) = NULL;
+	int retval = 0;
+
+	if (! func_puts)
+		func_puts = (int (*) (const char*)) dlsym (REAL_LIBC, "puts");
+
+	DPRINTF ("HOOK: puts( \"%s\" )\n", s);
+
+	retval = func_puts (s);
+	return retval;
+}
+
+uid_t getuid(void) {
+
+	static uid_t (*func_getuid) (void) = NULL;
+	if (!func_getuid)
+		func_getuid = (uid_t (*) (void)) dlsym (REAL_LIBC, "getuid");
+
+	uid_t retval = func_getuid();
+	DPRINTF("HOOK: getuid returned %d\n", retval);
+
+	return retval;
+}
+
+int system(const char *command) {
+
+	static int (*func_system) (const char *) = NULL;
+	int retval = 0;
+
+	if (! func_system)
+		func_system = (int (*) (const char*)) dlsym (REAL_LIBC, "system");
+
+	retval = func_system (command);
+
+	DPRINTF ("HOOK: system( \"%s\" ) returned %d\n", command, retval);
+
+	return retval;
+
+}
+
+void *malloc(size_t size) {
+
+	static void (*func_malloc) (size_t) = NULL;
+	if (! func_malloc)
+		func_malloc = (void (*) (size_t)) dlsym (REAL_LIBC, "malloc");
+
+	DPRINTF("HOOK: malloc( size=%zd )\n", size);
+	func_malloc(size);
+}
+
+
+void abort(void) {
+
+	static void (*func_abort) (void) = NULL;
+	if (! func_abort)
+		func_abort = (void (*) (void)) dlsym (REAL_LIBC, "abort");
+	DPRINTF("HOOK: abort()\n");
+	func_abort();
+}
+
+int chmod(const char *path, mode_t mode) {
+
+	static int (*func_chmod) (const char *, mode_t) = NULL;
+	int retval = 0;
+
+	if (! func_chmod)
+		func_chmod = (int (*) (const char*, mode_t)) dlsym (REAL_LIBC, "chmod");
+
+	retval = func_chmod (path, mode);
+
+	DPRINTF ("HOOK: chmod( \"%s\", mode=%o ) returned %d\n", path, mode, retval);
+
+	return retval;
+
+}
+
+sighandler_t bsd_signal(int signum, sighandler_t handler) {
+
+	static sighandler_t (*func_bsd_signal) (int, sighandler_t) = NULL;
+
+	if (! func_bsd_signal)
+		func_bsd_signal = (sighandler_t (*) (int, sighandler_t)) dlsym (REAL_LIBC, "bsd_signal");
+
+	sighandler_t retval = func_bsd_signal (signum, handler);
+
+	DPRINTF ("HOOK: bsd_signal \"%d\" \n", signum);
+	return retval;
+
+}
+
+int unlink(const char *pathname) {
+	static int (*func_unlink) (const char *) = NULL;
+	int retval = 0;
+
+	if (! func_unlink)
+		func_unlink = (int (*) (const char*)) dlsym (REAL_LIBC, "unlink");
+
+	retval = func_unlink (pathname);
+
+	DPRINTF ("HOOK: unlink( \"%s\" ) returned %d\n", pathname, retval);
+
+	return retval;
+
+}
+
+pid_t fork(void) {
+	static pid_t (*func_fork) (void) = NULL;
+	if (!func_fork)
+		func_fork = (pid_t (*) (void)) dlsym (REAL_LIBC, "fork");
+
+	pid_t retval = func_fork();
+	DPRINTF("HOOK: fork() returned %d\n", retval);
+
+	return retval;
+}
+
+void srand48(long int seedval) {
+
+	static void (*func_srand48) (long int) = NULL;
+	if (! func_srand48)
+		func_srand48 = (void (*) (long int)) dlsym (REAL_LIBC, "srand48");
+
+	DPRINTF("HOOK: srand48( size=%ld )\n", seedval);
+	func_srand48(seedval);
+
+}
+
+void *memset(void *s, int c, size_t n) {
+
+	static void (*func_memset) (void*, int, size_t) = NULL;
+	if (! func_memset)
+		func_memset = (void (*) (void*, int, size_t)) dlsym (REAL_LIBC, "memset");
+
+	DPRINTF("HOOK: memset( s=%p , c=%d, n=%zd )\n", s, c, n);
+	func_memset(s,c,n);
+}
+
+time_t time(time_t *t) {
+
+	static time_t (*func_time) (time_t *) = NULL;
+	time_t retval = 0;
+
+	if (! func_time)
+		func_time = (time_t (*) (time_t *)) dlsym (REAL_LIBC, "time");
+
+	DPRINTF ("HOOK: time( \"%d\" )\n", t);
+	retval = func_time (t);
+	return retval;
+}
+
+
+long int lrand48(void) {
+
+	static long int (*func_lrand48) (void) = NULL;
+	if (! func_lrand48)
+		func_lrand48 = (long int (*) (void)) dlsym (REAL_LIBC, "lrand48");
+
+	long int retval = func_lrand48();
+	DPRINTF("HOOK: lrand48() returned %ld\n", retval);
+
+	return retval;
+}
+
+size_t strlen(const char *s) {
+
+	static size_t (*func_strlen) (const char *) = NULL;
+	int retval = 0;
+
+	if (! func_strlen)
+		func_strlen = (size_t (*) (const char*)) dlsym (REAL_LIBC, "strlen");
+
+	retval = func_strlen (s);
+
+	DPRINTF ("HOOK: strlen( \"%s\" ) returned %d\n", s, retval);
+
+	return retval;
+}
+
+int raise(int sig) {
+
+	static int (*func_raise) (int) = NULL;
+	int retval = 0;
+
+	if (! func_raise)
+		func_raise = (int (*) (int)) dlsym (REAL_LIBC, "raise");
+
+	retval = func_raise (sig);
+	DPRINTF ("HOOK: raise( \"%d\" ) returned %d\n", sig, retval);
+
+	return retval;
 }

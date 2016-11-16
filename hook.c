@@ -28,6 +28,7 @@
  * to spy the strings compared using strcmp(), set the environment
  * variable SPYSTR, for example:
  *   LD_PRELOAD="./hook.so" SPYSTR=1 command
+ * to spy memcpy() buffers set the env variable SPYMEM
  */
 
 #include <stdarg.h>
@@ -41,7 +42,8 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#define DPRINTF(format, args...)	fprintf(stderr, format, ## args)
+int g_obvio=0;
+#define DPRINTF(format, args...)	if (!g_obvio) { g_obvio=1; fprintf(stderr, format, ## args); g_obvio=0; }
 
 #ifndef RTLD_NEXT
 #define RTLD_NEXT ((void *) -1l)
@@ -148,6 +150,7 @@ int strncmp(const char *s1, const char *s2, size_t n) {
 	return retval;
 
 }
+
 int close (int fd){	
 
 	static int (*func_close) (int) = NULL;
@@ -159,10 +162,11 @@ int close (int fd){
 	if (! func_close)
 		func_close = (int (*) (int)) dlsym (REAL_LIBC, "close");
 
-	if (fd == hook_fd)
+	if (fd == hook_fd) {
 		DPRINTF ("HOOK: closed hooked file %s (fd=%d)\n", spy_file, fd);
-	else
+	} else {
 		DPRINTF ("HOOK: closed file descriptor (fd=%d)\n", fd);
+	}
 		
 	retval = func_close (fd);
 	return retval;
@@ -184,10 +188,10 @@ int ioctl (int fd, request_t request, ...){
 	va_end (args);
 
 	if (fd != hook_fd) {
-		DPRINTF ("HOOK: ioctl (fd=%d)\n", fd);
+		DPRINTF ("HOOK: ioctl (fd=%d, request=%p, argp=%p [%02X])\n", fd, request, argp);
 		return func_ioctl (fd, request, argp);
 	} 
-	
+
 	DPRINTF ("HOOK: ioctl on hooked file %s (fd=%d)\n", spy_file, fd);
 
 	/* Capture the ioctl() calls */
@@ -283,30 +287,33 @@ void free (void *ptr){
 
 void *memcpy(void *dest, const void *src, size_t n) {
 
+	DPRINTF("HOOK: memcpy( dest=%p , src=%p, size=%zd )\n", dest, src, n);
+
 	static void (*func_memcpy) (void*, const void *, size_t) = NULL;
 	if (! func_memcpy)
 		func_memcpy = (void (*) (void*, const void *, size_t)) dlsym (REAL_LIBC, "memcpy");
 
-	DPRINTF("HOOK: memcpy( dest=%p , src=%p, size=%zd )\n", dest, src, n);
 	func_memcpy(dest,src,n);
 
-	char *tmp = dest;
-	char tmp_buf[1025] = {0};
-	size_t total = 0;
+	if (getenv("SPYMEM") != NULL) {
 
-	DPRINTF("    memcpy buffer: ");
-	while (total < n) {
-		tmp_buf[total] = *tmp;
-		DPRINTF("%02X ", tmp_buf[total]);
-		total++;
-		if (total == 1024)
-			break;
-		tmp++;
+		char *tmp = dest;
+		char tmp_buf[1025] = {0};
+		size_t total = 0;
+
+		DPRINTF("      memcpy buffer: ");
+		while (total < n) {
+			tmp_buf[total] = *tmp;
+			DPRINTF("%02X ", tmp_buf[total]);
+			total++;
+			if (total == 1024)
+				break;
+			tmp++;
+		}
+
+		DPRINTF("\n");
+		DPRINTF("      memcpy str: [%zd]=%s )\n",strlen(tmp_buf), tmp_buf);
 	}
-
-	DPRINTF("\n");
-	DPRINTF("    memcpy str: [%zd]=%s )\n",strlen(tmp_buf), tmp_buf);
-
 }
 
 int puts(const char *s) {
@@ -330,7 +337,7 @@ uid_t getuid(void) {
 		func_getuid = (uid_t (*) (void)) dlsym (REAL_LIBC, "getuid");
 
 	uid_t retval = func_getuid();
-	DPRINTF("HOOK: getuid returned %d\n", retval);
+	DPRINTF("HOOK: getuid() returned %d\n", retval);
 
 	return retval;
 }
@@ -402,6 +409,7 @@ sighandler_t bsd_signal(int signum, sighandler_t handler) {
 }
 
 int unlink(const char *pathname) {
+
 	static int (*func_unlink) (const char *) = NULL;
 	int retval = 0;
 
@@ -417,6 +425,7 @@ int unlink(const char *pathname) {
 }
 
 pid_t fork(void) {
+
 	static pid_t (*func_fork) (void) = NULL;
 	if (!func_fork)
 		func_fork = (pid_t (*) (void)) dlsym (REAL_LIBC, "fork");
@@ -438,7 +447,9 @@ void srand48(long int seedval) {
 
 }
 
+#if 0
 void *memset(void *s, int c, size_t n) {
+	DPRINTF("HOOK: memset()\n");
 
 	static void (*func_memset) (void*, int, size_t) = NULL;
 	if (! func_memset)
@@ -447,6 +458,7 @@ void *memset(void *s, int c, size_t n) {
 	DPRINTF("HOOK: memset( s=%p , c=%d, n=%zd )\n", s, c, n);
 	func_memset(s,c,n);
 }
+# endif
 
 time_t time(time_t *t) {
 
@@ -484,7 +496,13 @@ size_t strlen(const char *s) {
 
 	retval = func_strlen (s);
 
-	DPRINTF ("HOOK: strlen( \"%s\" ) returned %d\n", s, retval);
+	static int (*func_strncmp) (const char *, const char *, size_t) = NULL;
+        if (! func_strncmp)
+                func_strncmp = (int (*) (const char*, const char*, size_t)) dlsym (REAL_LIBC, "strncmp");
+
+	if (func_strncmp (s, "spyfile", 7) != 0){
+		DPRINTF ("HOOK: strlen( \"%s\" ) returned %d\n", s, retval);
+	}
 
 	return retval;
 }
